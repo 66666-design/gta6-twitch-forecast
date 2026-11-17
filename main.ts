@@ -156,6 +156,14 @@ const buildShape = (curves: Map<string, Map<number, number>>): { med: number[]; 
   return { med, spr };
 };
 
+/** Enforce non-decreasing order (rounding to 2 decimals preserves it, but the
+ *  contract requires it, so guarantee it rather than assume it). */
+const monotone = (row: number[]): number[] => {
+  const out = [...row];
+  for (let i = 1; i < out.length; i++) if (out[i] < out[i - 1]) out[i] = out[i - 1];
+  return out;
+};
+
 /** The shape-model quantiles for one hour h (2..24). */
 const modelQuantiles = (p1: number, med: number[], spr: number[], h: number): number[] => {
   const compH = med[h - 1];
@@ -163,12 +171,12 @@ const modelQuantiles = (p1: number, med: number[], spr: number[], h: number): nu
   const m = Math.exp(W * Math.log(compH) + (1 - W) * Math.log(pracH));
   const s = LAM_C * spr[h - 1] + LAM_P * RSD_H[h - 2];
   if (!Number.isFinite(m) || !Number.isFinite(s) || m <= 0 || s < 0) throw new Error(`bad shape at hour ${h}`);
-  return Z.map((z) => round2(p1 * m * Math.exp(z * s)));
+  return monotone(Z.map((z) => round2(p1 * m * Math.exp(z * s))));
 };
 
 /** The house baseline quantiles for one hour h (fallback). */
 const baselineQuantiles = (p1: number, h: number): number[] =>
-  Z_BASE.map((z) => round2(p1 * Math.exp(z * SIGMA_BASE * Math.sqrt(h - 1))));
+  monotone(Z_BASE.map((z) => round2(p1 * Math.exp(z * SIGMA_BASE * Math.sqrt(h - 1)))));
 
 /** Forecast one case; any failure falls back to the baseline for the case. */
 const forecastCase = (c: Case): Array<{ hour: number; q: number[] }> => {
